@@ -2,7 +2,16 @@
 .godot/
 /android/
 
+# Signing credentials. Godot splits these out of export_presets.cfg on
+# purpose: the presets are safe to share, this file holds keystore passwords
+# in plaintext. It does not exist until the first signed release build.
+export_credentials.cfg
+
+# Build output.
 *.apk
 *.apk.idsig
-*.import
-*.uid
+
+# NOTE: *.import and *.uid are deliberately NOT ignored. Godot stores a
+# resource's stable uid:// in them, and the editor writes those uids into
+# scene files whenever it saves one. Excluding them makes every clone invent
+# fresh uids, which breaks the references on any other machine.

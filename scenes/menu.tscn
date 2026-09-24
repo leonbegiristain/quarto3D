@@ -1,0 +1,102 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu.gd" id="1_menu"]
+
+[node name="Menu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.105882, 0.117647, 0.145098, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="VBoxContainer" parent="Center"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="Center/Title"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.921569, 0.941176, 0.980392, 1)
+theme_override_font_sizes/font_size = 52
+text = "QUARTO 3D"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Center/Title"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+text = "four in a line, sharing any one property"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="Center/Title"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="NewGameButton" type="Button" parent="Center/Title"]
+custom_minimum_size = Vector2(220, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "New game"
+
+[node name="SettingsButton" type="Button" parent="Center/Title"]
+custom_minimum_size = Vector2(220, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "Settings"
+
+[node name="Settings" type="VBoxContainer" parent="Center"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="SettingsLabel" type="Label" parent="Center/Settings"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.921569, 0.941176, 0.980392, 1)
+theme_override_font_sizes/font_size = 34
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="EmptyLabel" type="Label" parent="Center/Settings"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+text = "nothing to configure yet"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="Center/Settings"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="BackButton" type="Button" parent="Center/Settings"]
+custom_minimum_size = Vector2(220, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "Back"

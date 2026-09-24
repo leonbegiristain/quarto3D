@@ -1,0 +1,74 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/piece_panel.gd" id="1_panel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.0588235, 0.0705882, 0.0941176, 0.55)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.6, 0.68, 0.82, 0.22)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0, 0, 0, 0)
+ambient_light_source = 2
+ambient_light_color = Color(0.721569, 0.784314, 0.901961, 1)
+ambient_light_energy = 1.1
+tonemap_mode = 2
+tonemap_exposure = 1.25
+
+[sub_resource type="QuadMesh" id="QuadMesh_1"]
+size = Vector2(1.18, 1.18)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.3, 0.8, 1, 0.3)
+
+[node name="PiecePanel" type="PanelContainer"]
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+script = ExtResource("1_panel")
+
+[node name="Viewport" type="SubViewportContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="Viewport"]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+msaa_3d = 2
+size = Vector2i(198, 676)
+
+[node name="Camera3D" type="Camera3D" parent="Viewport/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12)
+projection = 1
+size = 20.625
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Viewport/SubViewport"]
+environment = SubResource("Environment_1")
+
+[node name="Key" type="DirectionalLight3D" parent="Viewport/SubViewport"]
+transform = Transform3D(0.887, 0, 0.462, 0.231, 0.866, -0.4435, -0.4, 0.5, 0.768, 0, 0, 0)
+light_energy = 1.5
+
+[node name="Fill" type="DirectionalLight3D" parent="Viewport/SubViewport"]
+transform = Transform3D(0.643, 0, -0.766, -0.133, 0.985, -0.112, 0.755, 0.174, 0.633, 0, 0, 0)
+light_energy = 0.5
+
+[node name="Highlight" type="MeshInstance3D" parent="Viewport/SubViewport"]
+material_override = SubResource("StandardMaterial3D_1")
+mesh = SubResource("QuadMesh_1")
+
+[node name="Pieces" type="Node3D" parent="Viewport/SubViewport"]

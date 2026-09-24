@@ -1,0 +1,162 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="2_orbit"]
+[ext_resource type="PackedScene" path="res://scenes/board.tscn" id="3_board"]
+[ext_resource type="PackedScene" path="res://scenes/piece_panel.tscn" id="4_panel"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.239216, 0.278431, 0.360784, 1)
+sky_horizon_color = Color(0.435294, 0.458824, 0.505882, 1)
+ground_bottom_color = Color(0.180392, 0.192157, 0.223529, 1)
+ground_horizon_color = Color(0.435294, 0.458824, 0.505882, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 3
+ambient_light_energy = 0.85
+tonemap_mode = 2
+ssao_enabled = true
+ssao_intensity = 1.5
+tonemap_exposure = 1.25
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8192, 0, 0.5736, 0.4056, 0.7071, -0.5792, -0.4056, 0.7071, 0.5792, 0, 6, 0)
+light_energy = 1.6
+shadow_enabled = true
+
+[node name="Fill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.766, 0, -0.643, -0.322, 0.866, 0.383, 0.557, 0.5, -0.663, 0, 6, 0)
+light_energy = 0.5
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("2_orbit")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 10)
+fov = 55.0
+
+[node name="Board" parent="." instance=ExtResource("3_board")]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Margin" type="MarginContainer" parent="UI"]
+mouse_filter = 2
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 320.0
+offset_bottom = 110.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Hint" type="Label" parent="UI/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.5)
+text = "drag to orbit  ·  tap a slot to isolate its lines  ·  Tab for pieces"
+
+[node name="Actions" type="HBoxContainer" parent="UI/Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="RestartButton" type="Button" parent="UI/Margin/VBox/Actions"]
+custom_minimum_size = Vector2(104, 32)
+layout_mode = 2
+size_flags_horizontal = 0
+focus_mode = 0
+text = "Restart"
+
+[node name="MenuButton" type="Button" parent="UI/Margin/VBox/Actions"]
+custom_minimum_size = Vector2(104, 32)
+layout_mode = 2
+size_flags_horizontal = 0
+focus_mode = 0
+text = "Main menu"
+
+[node name="TurnBanner" type="Label" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -320.0
+offset_top = 18.0
+offset_right = 320.0
+offset_bottom = 58.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 24
+text = "Player 1"
+horizontal_alignment = 1
+
+[node name="SwitchButton" type="Button" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -226.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 52.0
+grow_horizontal = 0
+focus_mode = 0
+text = "Show pieces"
+
+[node name="Prompt" type="VBoxContainer" parent="UI"]
+mouse_filter = 2
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -220.0
+offset_top = -104.0
+offset_right = 220.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="HeldLabel" type="Label" parent="UI/Prompt"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.72, 0.88, 1, 0.9)
+text = "holding"
+horizontal_alignment = 1
+
+[node name="PlaceButton" type="Button" parent="UI/Prompt"]
+custom_minimum_size = Vector2(190, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "Place here"
+
+[node name="GiveButton" type="Button" parent="UI/Prompt"]
+custom_minimum_size = Vector2(190, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "Give to Player 2"
+
+[node name="PiecePanel" parent="UI" instance=ExtResource("4_panel")]
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -226.0
+offset_top = 64.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 1

@@ -121,11 +121,16 @@ static func shared_property_names(ids: Array[int]) -> PackedStringArray:
 	return names
 
 
-func describe() -> String:
-	var words := PackedStringArray()
+## The six property words for this piece, low bit first.
+func words() -> PackedStringArray:
+	var result := PackedStringArray()
 	for bit in PROPERTY_NAMES.size():
-		words.append(PROPERTY_NAMES[bit][(id >> bit) & 1])
-	return "%02d %s" % [id, "/".join(words)]
+		result.append(PROPERTY_NAMES[bit][(id >> bit) & 1])
+	return result
+
+
+func describe() -> String:
+	return "%02d %s" % [id, "/".join(words())]
 
 
 func _set_bit(bit: int, value: bool) -> void:

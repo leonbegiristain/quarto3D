@@ -1,31 +1,39 @@
 class_name PiecePanel
 extends PanelContainer
 
-## All 64 pieces as a fixed HUD grid pinned to the right edge of the screen.
+## All 64 pieces as a fixed 8x8 HUD grid on the right of the screen.
 ##
 ## The pieces live in a SubViewport with its own World3D and its own
 ## orthographic camera. That is what makes the panel immune to the orbit rig:
 ## the main camera is not in this world at all, so there is nothing to
 ## compensate for.
 ##
-## Columns are shape x colour - white cube, black cube, white sphere, black
-## sphere - and rows run through the remaining four bits: small above big,
-## solid above hollow, plain above spotted, still above spinning.
+## The grid is four 4x4 blocks with a gap between them: cubes on the left,
+## spheres on the right, small on top, big below. Inside a block, columns run
+## white solid, white hollow, black solid, black hollow, and rows run plain
+## still, plain spinning, spotted still, spotted spinning. So every piece has
+## one fixed home that can be found by reading its properties off the axes.
 ##
 ## This is also where a piece is picked up. Clicking an available piece selects
 ## it, clicking it again puts it back. A piece already on the board is ghosted
 ## in place and cannot be picked.
+##
+## A property filter can hide pieces in place. The grid never reflows, so a
+## piece is always in its home slot whether or not its neighbours are shown.
 
-const COLUMNS := 4
-const ROWS := 16
+const COLUMNS := 8
+const ROWS := 8
+## Slots per block along each axis. The gap after every block is what makes
+## the grid read as four groups rather than one field of 64.
+const BLOCK := 4
 const SPACING := 1.25
+const BLOCK_GAP := 0.5
+## Border around the grid inside the panel, in world units.
+const FRAME_MARGIN := 0.25
 ## Three-quarter tilt, so a cube reads as a cube rather than a flat square
 ## against a head-on orthographic camera. Positive X brings the top face
 ## toward the viewer, matching how the board is framed from above.
 const PIECE_TILT := Vector3(0.42, 0.62, 0.0)
-## Click radius around a piece, in SubViewport pixels. The grid pitch is about
-## 41px, so this stays just under half of it and targets cannot overlap.
-const PICK_RADIUS := 20.0
 const NO_PIECE := -1
 const PIECE_SCENE: PackedScene = preload("res://scenes/piece.tscn")
 
@@ -37,6 +45,10 @@ var _available: Dictionary = {}  # int -> bool
 var _selected_id := NO_PIECE
 var _hovered_id := NO_PIECE
 var _locked := false
+## A piece passes the filter when it has every bit in _must_set and none in
+## _must_clear. Both zero means no filter.
+var _must_set := 0
+var _must_clear := 0
 
 @onready var _viewport_container: SubViewportContainer = $Viewport
 @onready var _camera: Camera3D = $Viewport/SubViewport/Camera3D
@@ -44,22 +56,32 @@ var _locked := false
 @onready var _highlight: MeshInstance3D = $Viewport/SubViewport/Highlight
 
 
-## Grid slot for a piece: column from bits 0-1, row from bits 2-5.
+## Grid slot for a piece. Shape picks the left or right half and size the top
+## or bottom half; the other four bits place it inside that block.
 static func slot_for(traits: PieceTraits) -> Vector2i:
-	var column := int(traits.is_sphere) * 2 + int(traits.is_black)
-	var row := int(traits.is_big) * 8 + int(traits.is_hollow) * 4 \
-		+ int(traits.is_spotted) * 2 + int(traits.is_spinning)
+	var column := int(traits.is_sphere) * 4 + int(traits.is_black) * 2 + int(traits.is_hollow)
+	var row := int(traits.is_big) * 4 + int(traits.is_spotted) * 2 + int(traits.is_spinning)
 	return Vector2i(column, row)
 
 
+## Centre of a slot in the panel world. Row 0 is at the top.
+static func slot_position(slot: Vector2i) -> Vector3:
+	return Vector3(_axis_offset(slot.x, COLUMNS), -_axis_offset(slot.y, ROWS), 0.0)
+
+
+@warning_ignore("integer_division")
+static func _axis_offset(index: int, count: int) -> float:
+	var gaps := (count - 1) / BLOCK
+	var span := (count - 1) * SPACING + gaps * BLOCK_GAP
+	return index * SPACING + (index / BLOCK) * BLOCK_GAP - span * 0.5
+
+
 func _ready() -> void:
-	# The camera frames the grid by height; the panel aspect then decides how
-	# much horizontal slack there is. Driven from the constants so the layout
-	# has a single source of truth.
-	_camera.size = ROWS * SPACING + SPACING * 0.5
 	_highlight.visible = false
 	mouse_exited.connect(_on_mouse_exited)
+	_viewport_container.resized.connect(_frame_camera)
 	_build_pieces()
+	_frame_camera()
 
 
 # --- selection ---------------------------------------------------------------
@@ -79,6 +101,7 @@ func select(id: int) -> void:
 		return
 	_selected_id = id
 	_refresh_highlight()
+	_refresh_visibility()
 	selection_changed.emit(get_selected_traits())
 
 
@@ -87,6 +110,7 @@ func clear_selection() -> void:
 		return
 	_selected_id = NO_PIECE
 	_refresh_highlight()
+	_refresh_visibility()
 	selection_changed.emit(null)
 
 
@@ -119,6 +143,27 @@ func set_available(id: int, available: bool) -> void:
 		_hovered_id = NO_PIECE
 	if _selected_id == id:
 		clear_selection()
+
+
+# --- filter ------------------------------------------------------------------
+
+## Show only the pieces that have every bit in `must_set` and none of the bits
+## in `must_clear`. This only changes what is drawn: availability and the
+## selection are untouched.
+func set_filter(must_set: int, must_clear: int) -> void:
+	_must_set = must_set
+	_must_clear = must_clear
+	_refresh_visibility()
+
+
+func passes_filter(id: int) -> bool:
+	return (id & _must_set) == _must_set and (id & _must_clear) == 0
+
+
+## The selected piece is always shown, whatever the filter says. Otherwise a
+## filter could hide the piece you are about to give or place.
+func is_shown(id: int) -> bool:
+	return id == _selected_id or passes_filter(id)
 
 
 # --- locking -----------------------------------------------------------------
@@ -159,8 +204,10 @@ func pick_id_at(local_position: Vector2) -> int:
 	# viewport sits inset by the style box content margin.
 	var viewport_position := local_position - _viewport_container.position
 	var best := NO_PIECE
-	var best_distance := PICK_RADIUS
+	var best_distance := pick_radius()
 	for id in _piece_by_id:
+		if not is_shown(id):
+			continue
 		var piece: PieceView = _piece_by_id[id]
 		var distance := _camera.unproject_position(piece.position).distance_to(viewport_position)
 		if distance >= best_distance:
@@ -168,6 +215,16 @@ func pick_id_at(local_position: Vector2) -> int:
 		best_distance = distance
 		best = id
 	return best
+
+
+## Click radius around a piece, in SubViewport pixels: half the on-screen
+## distance between two neighbouring slots, so targets can never overlap.
+## Measured through the camera rather than stored, so it follows the panel
+## size.
+func pick_radius() -> float:
+	var a := _camera.unproject_position(Vector3.ZERO)
+	var b := _camera.unproject_position(Vector3(SPACING, 0.0, 0.0))
+	return a.distance_to(b) * 0.5
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -185,7 +242,7 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _set_hovered(id: int) -> void:
-	var next := id if is_available(id) else NO_PIECE
+	var next := id if is_available(id) and is_shown(id) else NO_PIECE
 	if next == _hovered_id:
 		return
 	if _piece_by_id.has(_hovered_id):
@@ -200,6 +257,26 @@ func _on_mouse_exited() -> void:
 
 
 # --- build -------------------------------------------------------------------
+
+## Fit the whole grid inside the panel, whichever way round the panel is. An
+## orthographic camera's size is its height, so a panel narrower than the grid
+## needs a taller view to fit the width.
+func _frame_camera() -> void:
+	var view := _viewport_container.size
+	if view.x <= 0.0 or view.y <= 0.0:
+		return
+	# Outermost slot centres, plus a full slot so the edge pieces fit too.
+	var width := -2.0 * _axis_offset(0, COLUMNS) + SPACING + FRAME_MARGIN * 2.0
+	var height := -2.0 * _axis_offset(0, ROWS) + SPACING + FRAME_MARGIN * 2.0
+	_camera.size = maxf(height, width * view.y / view.x)
+
+
+func _refresh_visibility() -> void:
+	for id in _piece_by_id:
+		(_piece_by_id[id] as PieceView).visible = is_shown(id)
+	if _hovered_id != NO_PIECE and not is_shown(_hovered_id):
+		_set_hovered(NO_PIECE)
+
 
 func _refresh_highlight() -> void:
 	_highlight.visible = _selected_id != NO_PIECE
@@ -223,10 +300,7 @@ func _build_pieces() -> void:
 		var piece: PieceView = PIECE_SCENE.instantiate()
 		_piece_root.add_child(piece)
 		piece.traits = traits
-		piece.position = Vector3(
-			(slot.x - (COLUMNS - 1) * 0.5) * SPACING,
-			-(slot.y - (ROWS - 1) * 0.5) * SPACING,  # negated: row 0 at the top
-			0.0)
+		piece.position = slot_position(slot)
 		# Safe to set on the root: PieceView spins its mesh child and only ever
 		# writes scale here, so a spinning piece spins inside the tilt.
 		piece.rotation = PIECE_TILT

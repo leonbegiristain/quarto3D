@@ -31,16 +31,16 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Title" type="VBoxContainer" parent="Center"]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(460, 0)
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 18
 alignment = 1
 
 [node name="TitleLabel" type="Label" parent="Center/Title"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.921569, 0.941176, 0.980392, 1)
-theme_override_font_sizes/font_size = 52
+theme_override_font_sizes/font_size = 84
 text = "QUARTO 3D"
 horizontal_alignment = 1
 
@@ -51,35 +51,35 @@ text = "four in a line, sharing any one property"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="Center/Title"]
-custom_minimum_size = Vector2(0, 18)
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 mouse_filter = 2
 
 [node name="NewGameButton" type="Button" parent="Center/Title"]
-custom_minimum_size = Vector2(220, 44)
+custom_minimum_size = Vector2(340, 72)
 layout_mode = 2
 size_flags_horizontal = 4
 focus_mode = 0
 text = "New game"
 
 [node name="SettingsButton" type="Button" parent="Center/Title"]
-custom_minimum_size = Vector2(220, 44)
+custom_minimum_size = Vector2(340, 72)
 layout_mode = 2
 size_flags_horizontal = 4
 focus_mode = 0
 text = "Settings"
 
 [node name="Settings" type="VBoxContainer" parent="Center"]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(460, 0)
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 18
 alignment = 1
 
 [node name="SettingsLabel" type="Label" parent="Center/Settings"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.921569, 0.941176, 0.980392, 1)
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 52
 text = "Settings"
 horizontal_alignment = 1
 
@@ -90,12 +90,12 @@ text = "nothing to configure yet"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="Center/Settings"]
-custom_minimum_size = Vector2(0, 18)
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 mouse_filter = 2
 
 [node name="BackButton" type="Button" parent="Center/Settings"]
-custom_minimum_size = Vector2(220, 44)
+custom_minimum_size = Vector2(340, 72)
 layout_mode = 2
 size_flags_horizontal = 4
 focus_mode = 0

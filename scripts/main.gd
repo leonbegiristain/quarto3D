@@ -1,7 +1,7 @@
 extends Node3D
 
 ## Game root. Owns the turn machine and wires it to the two views: the 4x4x4
-## board and the piece panel pinned to the right edge.
+## board, shifted left, and the 8x8 piece tray on the right.
 ##
 ## Board and panel share one set of pieces: every trait id is either available
 ## in the panel or sitting on the board, never both and never neither.
@@ -24,23 +24,35 @@ const MENU_SCENE := "res://scenes/menu.tscn"
 ## cyan does not, player 2 being blue.
 const CHOOSING_COLOR := Color(0.82, 0.87, 0.96, 0.24)
 const HELD_ALPHA := 0.34
+const TRAY_SLIDE_TIME := 0.25
 
 var _game := GameState.new()
+var _tray_open := true
+## 0 with the tray in place, 1 with it slid off the right edge.
+var _tray_slide := 0.0
+var _tray_tween: Tween
+## The tray's and toggle's offsets as laid out in the scene, i.e. open. The
+## slide is applied on top of these rather than stored as a second layout.
+var _tray_home := Vector2.ZERO
+var _toggle_home := Vector2.ZERO
 
 @onready var _rig: OrbitCamera = $CameraRig
 @onready var _board: Board = $Board
-@onready var _panel: PiecePanel = $UI/PiecePanel
-@onready var _switch_button: Button = $UI/SwitchButton
-@onready var _turn_banner: Label = $UI/TurnBanner
-@onready var _held_label: Label = $UI/Prompt/HeldLabel
-@onready var _place_button: Button = $UI/Prompt/PlaceButton
-@onready var _give_button: Button = $UI/Prompt/GiveButton
-@onready var _restart_button: Button = $UI/Margin/VBox/Actions/RestartButton
-@onready var _menu_button: Button = $UI/Margin/VBox/Actions/MenuButton
+@onready var _tray: Control = $UI/Tray
+@onready var _tray_toggle: Button = $UI/TrayToggle
+@onready var _panel: PiecePanel = $UI/Tray/PiecePanel
+@onready var _filter_bar: FilterBar = $UI/Tray/FilterBar
+@onready var _turn_banner: Label = $UI/Header/TurnBanner
+@onready var _held_card: Control = $UI/HeldCard
+@onready var _preview: PiecePreview = $UI/HeldCard/VBox/Preview
+@onready var _held_label: Label = $UI/HeldCard/VBox/HeldLabel
+@onready var _place_button: Button = $UI/HeldCard/VBox/PlaceButton
+@onready var _give_button: Button = $UI/HeldCard/VBox/GiveButton
+@onready var _restart_button: Button = $UI/Header/Actions/RestartButton
+@onready var _menu_button: Button = $UI/Header/Actions/MenuButton
 
 
 func _ready() -> void:
-	_switch_button.pressed.connect(toggle_panel)
 	_place_button.pressed.connect(_on_place_pressed)
 	_give_button.pressed.connect(_on_give_pressed)
 	_restart_button.pressed.connect(_on_restart_pressed)
@@ -50,16 +62,21 @@ func _ready() -> void:
 	# The panel swallows mouse motion before the rig sees it, so without this
 	# the last hovered cell would stay swollen once the cursor crosses onto it.
 	_panel.mouse_entered.connect(_clear_board_hover)
+	_filter_bar.filter_changed.connect(_panel.set_filter)
 	_panel.selection_changed.connect(_on_panel_selection_changed)
 	_board.selection_changed.connect(_on_board_selection_changed)
 	_game.changed.connect(_refresh_ui)
+	get_viewport().size_changed.connect(_update_view_center)
+	_tray_toggle.pressed.connect(toggle_panel)
+	_tray_home = Vector2(_tray.offset_left, _tray.offset_right)
+	_toggle_home = Vector2(_tray_toggle.offset_left, _tray_toggle.offset_right)
 
-	set_panel_open(_panel.visible)
+	set_panel_open(true, false)
 	# Accounts for anything the board placed during its own _ready(), which is
 	# nothing in a real game and the demo scatter when that export is on.
 	_sync_panel_availability()
 	_refresh_ui()
-	_rig.focus(_board.global_position, Board.extent() + CUBE_PADDING, CUBE_PITCH, CUBE_YAW)
+	_rig.focus(_board.global_position, _framing_distance(), CUBE_PITCH, CUBE_YAW)
 
 
 # --- shared piece set --------------------------------------------------------
@@ -134,10 +151,15 @@ func _refresh_ui() -> void:
 	_assert_held_piece()
 
 	var traits := _panel.get_selected_traits()
-	_held_label.visible = traits != null and not _game.is_over()
-	if _held_label.visible:
-		var form := "giving  %s" if choosing else "to place  %s"
-		_held_label.text = form % traits.describe()
+	_held_card.visible = traits != null and not _game.is_over()
+	_preview.show_traits(traits if _held_card.visible else null)
+	if _held_card.visible:
+		var words := traits.words()
+		_held_label.text = "%s\n%s\n%s\n%s" % [
+			"giving" if choosing else "to place",
+			" · ".join(words.slice(0, 2)),
+			" · ".join(words.slice(2, 4)),
+			" · ".join(words.slice(4))]
 
 	_give_button.visible = choosing and traits != null
 	if _give_button.visible:
@@ -160,6 +182,9 @@ func _on_give_pressed() -> void:
 	# than opening on a cell they did not pick with the place button already up.
 	_board.clear_selection()
 	_game.hand_piece(_panel.get_selected_id())
+	# Placing happens on the board, and the held card already shows the piece,
+	# so the tray steps aside and gives the board the room.
+	set_panel_open(false)
 
 
 func _on_place_pressed() -> void:
@@ -182,6 +207,10 @@ func _on_place_pressed() -> void:
 	_sync_panel_availability()
 	if _game.is_over():
 		_board.set_win_highlight(_game.winning_lines)
+	else:
+		# Back for the choosing half. Left closed on a finished game, where
+		# there is nothing to choose and the winning line wants the room.
+		set_panel_open(true)
 	_refresh_ui()
 
 
@@ -198,30 +227,105 @@ func _on_menu_pressed() -> void:
 # --- panel and camera --------------------------------------------------------
 
 func toggle_panel() -> void:
-	set_panel_open(not _panel.visible)
+	set_panel_open(not _tray_open)
 
 
-func set_panel_open(open: bool) -> void:
-	_panel.visible = open
-	# Disabling the branch is what stops the spin _process calls while the
-	# panel is closed; a hidden SubViewport already stops rendering by itself.
-	_panel.process_mode = Node.PROCESS_MODE_INHERIT if open else Node.PROCESS_MODE_DISABLED
-	_switch_button.text = "Hide pieces" if open else "Show pieces"
+func is_panel_open() -> bool:
+	return _tray_open
+
+
+## Slides the tray off the right edge, or back. The toggle rides along on the
+## tray's left side, so it ends up at the screen edge as "<" and comes back as
+## ">". The board starts easing to its new centre at the same moment.
+func set_panel_open(open: bool, animate := true) -> void:
+	_tray_open = open
+	_tray_toggle.text = ">" if open else "<"
+	if _tray_tween != null and _tray_tween.is_valid():
+		_tray_tween.kill()
 	if open:
+		_set_tray_active(true)
 		_clear_board_hover()
+	var target := 0.0 if open else 1.0
+	if animate:
+		_tray_tween = create_tween()
+		_tray_tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		_tray_tween.tween_method(_set_tray_slide, _tray_slide, target, TRAY_SLIDE_TIME)
+		if not open:
+			_tray_tween.tween_callback(_set_tray_active.bind(false))
+	else:
+		_set_tray_slide(target)
+		_set_tray_active(open)
+	_update_view_center()
+
+
+func _set_tray_slide(amount: float) -> void:
+	_tray_slide = amount
+	# The tray's left offset is its distance in from the right edge, so
+	# shifting by exactly that much puts it just off screen.
+	var shift := -_tray_home.x * amount
+	_tray.offset_left = _tray_home.x + shift
+	_tray.offset_right = _tray_home.y + shift
+	_tray_toggle.offset_left = _toggle_home.x + shift
+	_tray_toggle.offset_right = _toggle_home.y + shift
+
+
+## Hidden once it is off screen, not just moved: that stops its SubViewport
+## rendering, and disabling the branch stops the spin _process calls.
+func _set_tray_active(active: bool) -> void:
+	_tray.visible = active
+	_panel.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+
+
+## Centre the board in the strip between the held card and the tray, or up
+## to the right edge while the tray is closed. Worked out from the actual
+## rects rather than widths copied from the scene. Re-framing resets the zoom,
+## which only happens on a resize or a tray toggle.
+func _update_view_center() -> void:
+	var view := get_viewport().get_visible_rect().size
+	if view.x <= 0.0:
+		return
+	var strip := _free_strip()
+	_rig.set_screen_center((strip.x + strip.y) / view.x - 1.0)
+	_rig.focus(_board.global_position, _framing_distance())
+
+
+## Left and right edges of the space the board gets. The card's column counts
+## even while the card is hidden, so the board does not jump sideways every
+## time a piece is picked up or put down. The tray counts by where it is
+## going, not where it is mid-slide, so the camera eases in step with it.
+func _free_strip() -> Vector2:
+	var left := _held_card.get_global_rect().end.x
+	var right := get_viewport().get_visible_rect().size.x
+	if _tray_open:
+		right += _tray_home.x
+	return Vector2(left, right)
+
+
+## CUBE_PADDING frames the board by height. A free strip narrower than it is
+## tall needs the camera further back, by however much more distance the
+## board's bounding sphere needs to fit the width than the height, so both
+## axes keep the same margin.
+func _framing_distance() -> float:
+	var base := Board.extent() + CUBE_PADDING
+	var view := get_viewport().get_visible_rect().size
+	if view.y <= 0.0:
+		return base
+	var half_fov := deg_to_rad(_rig.get_camera().fov) * 0.5
+	var strip := _free_strip()
+	var half_width := atan(tan(half_fov) * (strip.y - strip.x) / view.y)
+	return base * maxf(1.0, sin(half_fov) / sin(half_width))
 
 
 ## Mouse-over feedback: the cell under the cursor swells. Suppressed while
 ## orbiting, since a drag never ends in a selection and the swell would be
 ## promising something that will not happen.
 func _on_hovered(screen_position: Vector2) -> void:
-	var camera := _rig.get_camera()
-	if _game.is_over() or _rig.is_dragging() or camera == null:
+	if _game.is_over() or _rig.is_dragging() or _rig.get_camera() == null:
 		_clear_board_hover()
 		return
 	_board.set_hovered(_board.pick_cell(
-		camera.project_ray_origin(screen_position),
-		camera.project_ray_normal(screen_position)))
+		_rig.screen_ray_origin(screen_position),
+		_rig.screen_ray_normal(screen_position)))
 
 
 ## A tap picks a lattice cell to isolate. Tapping the selected cell again
@@ -229,12 +333,11 @@ func _on_hovered(screen_position: Vector2) -> void:
 ## other way out of an isolated view. Once the game is over the board stops
 ## listening, so nothing can disturb the winning line.
 func _on_tapped(screen_position: Vector2) -> void:
-	var camera := _rig.get_camera()
-	if _game.is_over() or camera == null:
+	if _game.is_over() or _rig.get_camera() == null:
 		return
 	var cell := _board.pick_cell(
-		camera.project_ray_origin(screen_position),
-		camera.project_ray_normal(screen_position))
+		_rig.screen_ray_origin(screen_position),
+		_rig.screen_ray_normal(screen_position))
 	if cell == Board.NO_CELL:
 		_board.clear_selection()
 	else:

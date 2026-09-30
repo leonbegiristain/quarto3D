@@ -33,11 +33,16 @@ var _yaw := 0.0
 var _pitch := 0.0
 var _distance := 10.0
 var _pivot := Vector3.ZERO
+## Where the pivot sits on screen, as a horizontal NDC coordinate: 0 is the
+## centre, -1 the left edge. Lets the HUD claim one side without the orbit
+## swinging around anything but the board.
+var _screen_x := 0.0
 
 var _target_yaw := 0.0
 var _target_pitch := 0.0
 var _target_distance := 10.0
 var _target_pivot := Vector3.ZERO
+var _target_screen_x := 0.0
 
 var _dragging := false
 var _touches: Dictionary = {}
@@ -74,12 +79,18 @@ func focus(center: Vector3, distance: float, pitch := INF, yaw := INF) -> void:
 		_target_yaw = _yaw + wrapf(yaw - _yaw, -PI, PI)
 
 
+## Glide the pivot to a horizontal spot on screen, in NDC (-1 left, 1 right).
+func set_screen_center(ndc_x: float) -> void:
+	_target_screen_x = clampf(ndc_x, -1.0, 1.0)
+
+
 func _process(delta: float) -> void:
 	var weight := 1.0 - exp(-SMOOTHING * delta)
 	_yaw = lerpf(_yaw, _target_yaw, weight)
 	_pitch = lerpf(_pitch, _target_pitch, weight)
 	_distance = lerpf(_distance, _target_distance, weight)
 	_pivot = _pivot.lerp(_target_pivot, weight)
+	_screen_x = lerpf(_screen_x, _target_screen_x, weight)
 	_apply_transform()
 
 
@@ -185,9 +196,46 @@ func get_camera() -> Camera3D:
 	return _camera
 
 
+## Start of the pick ray through a screen point. Use this and screen_ray_normal()
+## rather than the Camera3D project_ray_* calls, which ignore the frustum
+## offset and so miss by the whole lens shift.
+func screen_ray_origin(_screen_position: Vector2) -> Vector3:
+	return _camera.global_position
+
+
+## Direction of the pick ray through a screen point, taken from the real
+## projection matrix, lens shift included.
+func screen_ray_normal(screen_position: Vector2) -> Vector3:
+	var view := _camera.get_viewport().get_visible_rect().size
+	var ndc := Vector2(screen_position.x / view.x * 2.0 - 1.0, 1.0 - screen_position.y / view.y * 2.0)
+	# Any depth inside the frustum lies on the ray; 0 is valid for both depth
+	# conventions.
+	var eye := _camera.get_camera_projection().inverse() * Vector4(ndc.x, ndc.y, 0.0, 1.0)
+	var local := Vector3(eye.x, eye.y, eye.z) / eye.w
+	return (_camera.global_transform.basis * local).normalized()
+
+
 func _apply_transform() -> void:
 	position = _pivot
 	# Negated pitch so a positive value means "camera above the pivot".
 	basis = Basis.from_euler(Vector3(-_pitch, _yaw, 0.0))
 	if _camera != null:
 		_camera.position = Vector3(0.0, 0.0, _distance)
+		_apply_lens_shift()
+
+
+## Puts the pivot at `_screen_x` on screen with an off-axis frustum: a lens
+## shift. The camera still looks straight at the pivot, so the board is drawn
+## exactly as it would be centred, only moved over. Sliding the camera
+## sideways instead (h_offset) views the board off-axis and visibly skews it.
+##
+## The frustum is rebuilt from `fov`, which stays the one lens setting: the
+## near-plane height that `fov` implies, with the window slid across.
+func _apply_lens_shift() -> void:
+	var view := _camera.get_viewport().get_visible_rect().size
+	if view.y <= 0.0:
+		return
+	# Height, because the camera keeps height by default.
+	var height := 2.0 * _camera.near * tan(deg_to_rad(_camera.fov) * 0.5)
+	var half_width := height * 0.5 * view.x / view.y
+	_camera.set_frustum(height, Vector2(-_screen_x * half_width, 0.0), _camera.near, _camera.far)

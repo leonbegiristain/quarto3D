@@ -1,0 +1,37 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/piece_preview.gd" id="1_preview"]
+[ext_resource type="Environment" path="res://scenes/hud_environment.tres" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/piece.tscn" id="3_piece"]
+
+[node name="PiecePreview" type="SubViewportContainer"]
+custom_minimum_size = Vector2(150, 150)
+mouse_filter = 2
+stretch = true
+script = ExtResource("1_preview")
+
+[node name="SubViewport" type="SubViewport" parent="."]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+msaa_3d = 2
+size = Vector2i(150, 150)
+
+[node name="Camera3D" type="Camera3D" parent="SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12)
+projection = 1
+size = 1.55
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewport"]
+environment = ExtResource("2_env")
+
+[node name="Key" type="DirectionalLight3D" parent="SubViewport"]
+transform = Transform3D(0.887, 0, 0.462, 0.231, 0.866, -0.4435, -0.4, 0.5, 0.768, 0, 0, 0)
+light_energy = 1.5
+
+[node name="Fill" type="DirectionalLight3D" parent="SubViewport"]
+transform = Transform3D(0.643, 0, -0.766, -0.133, 0.985, -0.112, 0.755, 0.174, 0.633, 0, 0, 0)
+light_energy = 0.5
+
+[node name="Piece" parent="SubViewport" instance=ExtResource("3_piece")]
+visible = false

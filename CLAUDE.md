@@ -56,10 +56,13 @@ populate it; only `--import` does. Skipping this produces a wall of
 project.godot          main scene is scenes/menu.tscn
 scenes/
   menu.tscn            title screen, and an empty settings page
-  main.tscn            game root: camera rig, board, HUD, piece panel
+  main.tscn            game root: camera rig, board, HUD, piece tray, held card
   board.tscn           bare Node3D, all geometry is built in code
   piece.tscn           Node3D + MeshInstance3D, driven by PieceView
   piece_panel.tscn     PanelContainer wrapping a SubViewport with its own world
+  piece_preview.tscn   one large piece in its own SubViewport world
+  hud_environment.tres lighting shared by the tray and the preview
+  hud_panel_style.tres stylebox shared by the tray and the held card
 scripts/               see below
 shaders/piece.gdshader one shader, four materials, triplanar jittered spots
 ```
@@ -78,8 +81,11 @@ piece_traits.gd   PieceTraits   the 6-bit encoding. no geometry
 board.gd          Board         storage + visuals for the lattice. no rules
 piece_view.gd     PieceView     one piece: mesh, material, scale, spin
 piece_assets.gd   PieceAssets   shared mesh/material caches (4 meshes, 4 mats)
-piece_panel.gd    PiecePanel    the 64-slot HUD tray, and picking from it
-orbit_camera.gd   OrbitCamera   orbit/pinch rig, emits tapped + hovered
+piece_panel.gd    PiecePanel    the 8x8 HUD tray, picking from it, filtering it
+piece_preview.gd  PiecePreview  the big copy of the selected/held piece
+filter_bar.gd     FilterBar     six PropertyChips -> two filter bitmasks
+property_chip.gd  PropertyChip  one tri-state chip (any/clear/set), drawn in code
+orbit_camera.gd   OrbitCamera   orbit/pinch rig with lens shift, tapped + hovered
 main.gd           (no class)    the only script that knows about both sides
 menu.gd           (no class)    title screen
 ```
@@ -133,6 +139,15 @@ handles both, so touch orbits at exactly 2.00x speed. The fix belongs in
 `OrbitCamera`, ignoring mouse events whose `device` is
 `InputEvent.DEVICE_ID_EMULATION`. **This is still outstanding.** See the
 comment in `project.godot`.
+
+**Pick rays must come from `OrbitCamera.screen_ray_origin/normal()`.** The rig
+puts the board left of centre with an off-axis frustum (a lens shift, so the
+board is not viewed at an angle). `Camera3D.project_ray_normal()` ignores the
+frustum offset and misses by the whole shift; `unproject_position()` is fine.
+
+**`Board.pick_cell` lets the nearer cell win**, so at the default view about
+half the cells cannot be tapped at their own centre because a marker in front
+takes the tap. This is the existing design, not a camera bug.
 
 **`.uid` and `.import` files are committed on purpose.** They carry stable
 `uid://` values that the editor writes into scene files on save. See the note
